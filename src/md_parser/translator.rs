@@ -1,11 +1,9 @@
-use crate::Markdown;
-use crate::MarkdownInline;
-use crate::MarkdownText;
+use crate::*;
 
 pub fn translate(md: Vec<Markdown>) -> String {
     md.iter()
         .map(|bit| match bit {
-            Markdown::Heading(size, line) => translate_header(*size, line.to_vec()),
+            Markdown::Heading(size, line) => translate_header(size, line.to_vec()),
             Markdown::UnorderedList(lines) => translate_unordered_list(lines.to_vec()),
             Markdown::OrderedList(lines) => translate_ordered_list(lines.to_vec()),
             Markdown::Codeblock(lang, code) => {
@@ -18,23 +16,23 @@ pub fn translate(md: Vec<Markdown>) -> String {
 }
 
 fn translate_boldtext(boldtext: String) -> String {
-    format!("<b>{}</b>", boldtext)
+    format!("<b>{boldtext}</b>")
 }
 
 fn translate_italic(italic: String) -> String {
-    format!("<i>{}</i>", italic)
+    format!("<i>{italic}</i>")
 }
 
 fn translate_inline_code(code: String) -> String {
-    format!("<code>{}</code>", code)
+    format!("<code>{code}</code>")
 }
 
 fn translate_link(text: String, url: String) -> String {
-    format!("<a href=\"{}\">{}</a>", url, text)
+    format!("<a href=\"{url}\">{text}</a>")
 }
 
 fn translate_image(text: String, url: String) -> String {
-    format!("<img src=\"{}\" alt=\"{}\" />", url, text)
+    format!("<img src=\"{url}\" alt=\"{text}\" />")
 }
 
 fn translate_list_elements(lines: Vec<MarkdownText>) -> String {
@@ -45,7 +43,8 @@ fn translate_list_elements(lines: Vec<MarkdownText>) -> String {
         .join("")
 }
 
-fn translate_header(size: usize, text: MarkdownText) -> String {
+fn translate_header(size: &HeadingLevel, text: MarkdownText) -> String {
+    let size = (*size) as u8;
     format!("<h{}>{}</h{}>", size, translate_text(text), size)
 }
 
@@ -62,15 +61,15 @@ fn translate_ordered_list(lines: Vec<MarkdownText>) -> String {
 // }
 
 fn translate_codeblock(lang: String, code: String) -> String {
-    format!("<pre><code class=\"lang-{}\">{}</code></pre>", lang, code)
+    format!("<pre><code class=\"lang-{lang}\">{code}</code></pre>")
 }
 
 fn translate_line(text: MarkdownText) -> String {
     let line = translate_text(text);
-    if line.len() > 0 {
-        format!("<p>{}</p>", line)
+    if !line.is_empty() {
+        format!("<p>{line}</p>")
     } else {
-        format!("{}", line)
+        line
     }
 }
 
@@ -79,9 +78,14 @@ fn translate_text(text: MarkdownText) -> String {
         .map(|part| match part {
             MarkdownInline::Bold(text) => translate_boldtext(text.to_string()),
             MarkdownInline::Italic(text) => translate_italic(text.to_string()),
+            MarkdownInline::BoldItalic(text) => {
+                translate_italic(translate_boldtext(text.to_string()))
+            }
             MarkdownInline::InlineCode(code) => translate_inline_code(code.to_string()),
-            MarkdownInline::Link(text, url) => translate_link(text.to_string(), url.to_string()),
-            MarkdownInline::Image(text, url) => translate_image(text.to_string(), url.to_string()),
+            MarkdownInline::Link((text, url)) => translate_link(text.to_string(), url.to_string()),
+            MarkdownInline::Image((text, url)) => {
+                translate_image(text.to_string(), url.to_string())
+            }
             MarkdownInline::Plaintext(text) => text.to_string(),
         })
         .collect::<Vec<String>>()
@@ -138,15 +142,15 @@ mod tests {
     #[test]
     fn test_translate_text() {
         let x = translate_text(vec![
-            MarkdownInline::Plaintext(String::from(
+            MarkdownInline::Plaintext(
                 "Foobar is a Python library for dealing with word pluralization.",
-            )),
-            MarkdownInline::Bold(String::from("bold")),
-            MarkdownInline::Italic(String::from("italic")),
-            MarkdownInline::InlineCode(String::from("code")),
-            MarkdownInline::Link(String::from("tag"), String::from("https://link.com")),
-            MarkdownInline::Image(String::from("tag"), String::from("https://link.com")),
-            MarkdownInline::Plaintext(String::from(". the end!")),
+            ),
+            MarkdownInline::Bold("bold"),
+            MarkdownInline::Italic("italic"),
+            MarkdownInline::InlineCode("code"),
+            MarkdownInline::Link(("tag", "https://link.com")),
+            MarkdownInline::Image(("tag", "https://link.com")),
+            MarkdownInline::Plaintext(". the end!"),
         ]);
         assert_eq!(x, String::from("Foobar is a Python library for dealing with word pluralization.<b>bold</b><i>italic</i><code>code</code><a href=\"https://link.com\">tag</a><img src=\"https://link.com\" alt=\"tag\" />. the end!"));
         let x = translate_text(vec![]);
@@ -156,7 +160,10 @@ mod tests {
     #[test]
     fn test_translate_header() {
         assert_eq!(
-            translate_header(1, vec![MarkdownInline::Plaintext(String::from("Foobar"))]),
+            translate_header(
+                &HeadingLevel::Heading1,
+                vec![MarkdownInline::Plaintext("Foobar")]
+            ),
             String::from("<h1>Foobar</h1>")
         );
     }
@@ -165,10 +172,10 @@ mod tests {
     fn test_translate_list_elements() {
         assert_eq!(
             translate_list_elements(vec![
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
             ]),
             String::from("<li>Foobar</li><li>Foobar</li><li>Foobar</li><li>Foobar</li>")
         );
@@ -178,10 +185,10 @@ mod tests {
     fn test_translate_unordered_list() {
         assert_eq!(
             translate_unordered_list(vec![
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
             ]),
             String::from("<ul><li>Foobar</li><li>Foobar</li><li>Foobar</li><li>Foobar</li></ul>")
         );
@@ -191,10 +198,10 @@ mod tests {
     fn test_translate_ordered_list() {
         assert_eq!(
             translate_ordered_list(vec![
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
-                vec![MarkdownInline::Plaintext(String::from("Foobar"))],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
+                vec![MarkdownInline::Plaintext("Foobar")],
             ]),
             String::from("<ol><li>Foobar</li><li>Foobar</li><li>Foobar</li><li>Foobar</li></ol>")
         );
@@ -231,10 +238,10 @@ foobar.singularize(\'phenomena\') # returns \'phenomenon\'
     fn test_translate_line() {
         assert_eq!(
             translate_line(vec![
-                MarkdownInline::Plaintext(String::from("Foobar")),
-                MarkdownInline::Bold(String::from("Foobar")),
-                MarkdownInline::Italic(String::from("Foobar")),
-                MarkdownInline::InlineCode(String::from("Foobar")),
+                MarkdownInline::Plaintext("Foobar"),
+                MarkdownInline::Bold("Foobar"),
+                MarkdownInline::Italic("Foobar"),
+                MarkdownInline::InlineCode("Foobar"),
             ]),
             String::from("<p>Foobar<b>Foobar</b><i>Foobar</i><code>Foobar</code></p>")
         );
